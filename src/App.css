@@ -1,5 +1,4 @@
-/* src/App.css — ПОЛНОСТЬЮ ЗАМЕНИ СОДЕРЖИМОЕ ФАЙЛА */
-
+/* src/App.css */
 html,
 body,
 #root {
@@ -7,7 +6,8 @@ body,
   width: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Важно! Убирает скроллбар */
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .app {
@@ -17,40 +17,25 @@ body,
   flex-direction: column;
 }
 
-.filters {
-  padding: 10px;
-  background: #f0f0f0;
-  border-bottom: 1px solid #ddd;
-  z-index: 1000;
-  flex-shrink: 0; /* Не сжимается */
-}
-
 .main {
-  flex: 1; /* Занимает всё оставшееся пространство */
+  flex: 1;
   display: flex;
   position: relative;
-  overflow: hidden; /* Важно для карты */
+  overflow: hidden;
+  background-color: #f8f9fa;
 }
 
-/* Контейнер карты — на весь экран */
+/* Контейнер для карты */
+.map-container {
+  flex: 1;
+  position: relative;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Переопределение стилей Leaflet для корректного отображения */
 .leaflet-container {
   height: 100% !important;
   width: 100% !important;
-  position: absolute !important;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-}
-
-/* Боковая панель информации */
-.info-panel {
-  width: 350px;
-  padding: 20px;
-  background: white;
-  border-left: 1px solid #ccc;
-  overflow-y: auto;
-  z-index: 1000;
-  box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-  flex-shrink: 0;
+  outline: 0;
 }

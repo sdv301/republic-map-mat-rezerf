@@ -30,7 +30,6 @@ function App() {
   }, []);
 
   const handleInfoPanelToggle = useCallback((expanded) => {
-    // Если открывается информационная панель, сворачиваем фильтры
     if (expanded) {
       setIsFiltersExpanded(false);
     }
@@ -38,7 +37,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* Фильтры */}
       <Filters 
         filters={filters} 
         setFilters={handleFilterChange}
@@ -47,14 +45,14 @@ function App() {
         onPanelToggle={handleFiltersToggle}
       />
       
-      {/* Основной контент */}
-      <div className="main" style={{ marginTop: '60px', height: 'calc(100vh - 60px)' }}>
-        <Map 
-          filters={filters} 
-          onDistrictClick={handleDistrictSelect}
-        />
+      <div className="main">
+        <div className="map-container">
+          <Map 
+            filters={filters} 
+            onDistrictClick={handleDistrictSelect}
+          />
+        </div>
         
-        {/* Информационная панель */}
         <InfoPanel 
           district={selectedDistrict} 
           filters={filters}

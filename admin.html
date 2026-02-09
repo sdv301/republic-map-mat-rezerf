@@ -20,8 +20,41 @@
     <label>Район:</label>
     <select id="districtId">
       <option value="yakutsk">Якутск</option>
+      <option value="zhatay">Жатай</option>
+      <option value="abysky">Абыйский район</option>
       <option value="aldansky">Алданский район</option>
-      <!-- Добавьте остальные районы -->
+      <option value="allaikhovsky">Аллаиховский район</option>
+      <option value="amginsky">Амгинский район</option>
+      <option value="anabarsky">Анабарский район</option>
+      <option value="bulunsky">Булунский район</option>
+      <option value="verkhnevilyuysky">Верхневилюйский район</option>
+      <option value="verkhnekolymsky">Верхнеколымский район</option>
+      <option value="verkhoyansky">Верхоянский район</option>
+      <option value="vilyuysky">Вилюйский район</option>
+      <option value="gorny">Горный район</option>
+      <option value="zhigansky">Жиганский район</option>
+      <option value="kobyaysky">Кобяйский район</option>
+      <option value="lensky">Ленский район</option>
+      <option value="megino-kangalassky">Мегино-Кангаласский район</option>
+      <option value="mirninsky">Мирнинский район</option>
+      <option value="omsky">Момский район</option>
+      <option value="namsky">Намский район</option>
+      <option value="neryungrinsky">Нерюнгринский район</option>
+      <option value="nizhnekolymsky">Нижнеколымский район</option>
+      <option value="nyurbinsky">Нюрбинский район</option>
+      <option value="oymyakonsky">Оймяконский район</option>
+      <option value="olekminsky">Олёкминский район</option>
+      <option value="olenek">Оленёкский район</option>
+      <option value="srednekolymsky">Среднеколымский район</option>
+      <option value="suntarsky">Сунтарский район</option>
+      <option value="tattinsky">Таттинский район</option>
+      <option value="tomponsky">Томпонский район</option>
+      <option value="ust-aldansky">Усть-Алданский район</option>
+      <option value="ust-maysky">Усть-Майский район</option>
+      <option value="ust-yansky">Усть-Янский район</option>
+      <option value="khangalassky">Хангаласский район</option>
+      <option value="churapchinsky">Чурапчинский район</option>
+      <option value="eveno-bytantaysky">Эвено-Бытантайский район</option>
     </select>
   </div>
 
@@ -61,10 +94,50 @@
   </div>
 
   <button onclick="addData()">Добавить данные</button>
+
+  <hr>
+
+  <h2>Загрузить из Excel</h2>
+  <div class="form-group">
+    <label>Выберите Excel файл (.xlsx, .xls):</label>
+    <input type="file" id="excelFile" accept=".xlsx, .xls">
+  </div>
+  <button onclick="uploadExcel()" style="background: #2196F3;">Загрузить Excel</button>
   
   <div id="message"></div>
 
   <script>
+    async function uploadExcel() {
+      const fileInput = document.getElementById('excelFile');
+      if (!fileInput.files[0]) {
+        alert('Пожалуйста, выберите файл');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      try {
+        document.getElementById('message').innerHTML = 'Загрузка...';
+        const response = await fetch('http://localhost:5000/api/upload-excel', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          document.getElementById('message').innerHTML = 
+            `<div class="success">✅ Файл успешно обработан! Добавлено записей: ${result.count}</div>`;
+        } else {
+          document.getElementById('message').innerHTML = 
+            `<div class="error">❌ Ошибка: ${result.error}</div>`;
+        }
+      } catch (error) {
+        document.getElementById('message').innerHTML = 
+          `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+      }
+    }
+
     async function addData() {
       const data = {
         date: document.getElementById('date').value,

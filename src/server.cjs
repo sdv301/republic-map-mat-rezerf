@@ -1,12 +1,28 @@
-// src/server.js
+// src/server.cjs
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const xlsx = require('xlsx');
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
+const upload = multer({ dest: 'uploads/' });
+
+// Убедимся, что папка uploads существует
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
+
 const PORT = 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Подключение к БД
+const dbPath = path.resolve(__dirname, '../data.sqlite');
+const db = new sqlite3.Database(dbPath);
 
 // Данные для ВСЕХ районов Якутии
 const allDistricts = {
@@ -52,12 +68,10 @@ const allDistricts = {
 function findDistrict(id) {
   const decodedId = decodeURIComponent(id);
   
-  // Точное совпадение
   if (allDistricts[decodedId]) {
     return allDistricts[decodedId];
   }
   
-  // Поиск по ID или части названия
   return Object.values(allDistricts).find(d => 
     d.id === decodedId || 
     d.name.toLowerCase() === decodedId.toLowerCase() ||
@@ -65,126 +79,77 @@ function findDistrict(id) {
   );
 }
 
-// КОРНЕВОЙ МАРШРУТ
-app.get('/', (req, res) => {
-  res.json({
-    message: '🚀 Сервер карты Якутии работает!',
-    version: '1.0',
-    districtsCount: Object.keys(allDistricts).length,
-    endpoints: {
-      '/api/districts': 'GET - список всех районов',
-      '/api/district/:id': 'GET - информация о районе',
-      '/api/district/:id/data': 'GET - данные с фильтрами',
-      '/api/district/:id/info': 'GET - дополнительная информация'
-    },
-    example: 'Попробуйте: /api/district/Якутск или /api/districts'
-  });
-});
-
-// API: Получить информацию о районе
-app.get('/api/district/:id', (req, res) => {
+// API: Добавить данные вручную
+app.post('/api/district/:id/data', (req, res) => {
   const { id } = req.params;
-  console.log('📥 Запрос района:', id);
+  const data = req.body;
   
   const district = findDistrict(id);
-  
-  if (district) {
-    const response = {
-      ...district,
-      description: `${district.name} расположен в Республике Саха (Якутия). Население: ${district.population.toLocaleString()} чел., площадь: ${district.area_km2.toLocaleString()} км².`
-    };
-    res.json(response);
-  } else {
-    res.status(404).json({ 
-      error: 'Район не найден',
-      requested: id,
-      suggestion: 'Проверьте правильность названия или посмотрите список районов: /api/districts'
-    });
-  }
-});
-
-// API: Получить данные с фильтрами
-app.get('/api/district/:id/data', (req, res) => {
-  const { id } = req.params;
-  const { startDate = '2020-01-01', endDate = '2023-12-31', indicatorType = 'all' } = req.query;
-  
-  console.log('📊 Запрос данных для:', id, { startDate, endDate, indicatorType });
-  
-  const district = findDistrict(id);
-  
   if (!district) {
-    res.status(404).json({ error: 'Район не найден' });
-    return;
+    return res.status(404).json({ error: 'Район не найден' });
   }
+
+  const sql = `INSERT INTO district_data 
+    (district_id, date, indicator_type, indicator_name, value, unit, source) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)`;
   
-  // Тестовые данные
-  const years = ['2020', '2021', '2022', '2023'];
-  const populationData = years.map((year, idx) => ({
-    date: `${year}-01-01`,
-    value: Math.round(district.population * (0.95 + idx * 0.02)),
-    unit: 'чел.',
-    source: 'Росстат'
-  }));
-  
-  const testData = {
-    districtId: district.id,
-    period: { startDate, endDate },
-    indicators: {
-      population: {
-        'Население': populationData
-      },
-      economy: {
-        'ВРП': [
-          { date: '2023-01-01', value: Math.round(district.population * 1.2), unit: 'млн руб.', source: 'Минэкономразвития' }
-        ],
-        'Средняя з/п': [
-          { date: '2023-01-01', value: district.id === 'yakutsk' ? 85000 : 65000, unit: 'руб.', source: 'Росстат' }
-        ]
-      },
-      climate: {
-        'Средняя температура года': [
-          { date: '2023-01-01', value: district.id === 'yakutsk' ? -8.5 : -15.5, unit: '°C', source: 'Росгидромет' }
-        ]
-      }
-    },
-    statistics: {
-      total_indicators: 4,
-      earliest_date: '2020-01-01',
-      latest_date: '2023-01-01'
+  const params = [
+    district.id,
+    data.date,
+    data.indicator_type,
+    data.indicator_name,
+    data.value,
+    data.unit,
+    data.source
+  ];
+
+  db.run(sql, params, function(err) {
+    if (err) {
+      console.error('Ошибка записи в БД:', err.message);
+      return res.status(500).json({ success: false, error: err.message });
     }
-  };
-  
-  if (indicatorType !== 'all' && testData.indicators[indicatorType]) {
-    testData.indicators = { [indicatorType]: testData.indicators[indicatorType] };
-  }
-  
-  res.json(testData);
+    res.json({ success: true, id: this.lastID });
+  });
 });
 
-// API: Дополнительная информация
-app.get('/api/district/:id/info', (req, res) => {
-  const { id } = req.params;
-  const district = findDistrict(id);
-  
-  if (!district) {
-    res.status(404).json({ error: 'Район не найден' });
-    return;
+// API: Загрузка Excel
+app.post('/api/upload-excel', upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Файл не загружен' });
   }
-  
-  res.json({
-    geography: [{
-      title: 'Географическое положение',
-      content: `${district.name} расположен в Республике Саха (Якутия). Административный центр — ${district.capital}. Площадь: ${district.area_km2.toLocaleString()} км².`,
-      updatedAt: '2023-01-01'
-    }],
-    economy: [{
-      title: 'Экономика',
-      content: district.id === 'yakutsk' 
-        ? 'Алмазогранильная промышленность, строительство, энергетика, пищевая промышленность, транспортный узел.'
-        : 'Основные отрасли: сельское хозяйство, оленеводство, добывающая промышленность, рыболовство.',
-      updatedAt: '2023-01-01'
-    }]
-  });
+
+  try {
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = xlsx.utils.sheet_to_json(worksheet);
+
+    let count = 0;
+    const stmt = db.prepare(`INSERT OR REPLACE INTO district_data 
+      (district_id, date, indicator_type, indicator_name, value, unit, source) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)`);
+
+    data.forEach(row => {
+      stmt.run(
+        row.district_id,
+        row.date,
+        row.indicator_type || row.type,
+        row.indicator_name || row.name,
+        row.value,
+        row.unit,
+        row.source
+      );
+      count++;
+    });
+
+    stmt.finalize();
+    // Удаляем временный файл
+    fs.unlinkSync(req.file.path);
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('Ошибка обработки Excel:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // API: Список всех районов
@@ -200,29 +165,25 @@ app.get('/api/districts', (req, res) => {
   res.json(districtsList);
 });
 
-// Обработчик 404 для несуществующих маршрутов
-app.use((req, res) => {
-  res.status(404).json({
-    error: 'Маршрут не найден',
-    path: req.path,
-    availableEndpoints: [
-      '/',
-      '/api/districts',
-      '/api/district/:id',
-      '/api/district/:id/data',
-      '/api/district/:id/info'
-    ]
-  });
+// API: Получить информацию о районе
+app.get('/api/district/:id', (req, res) => {
+  const { id } = req.params;
+  const district = findDistrict(id);
+  
+  if (district) {
+    res.json({
+      ...district,
+      description: `${district.name} расположен в Республике Саха (Якутия).`
+    });
+  } else {
+    res.status(404).json({ error: 'Район не найден' });
+  }
 });
 
-// Запуск сервера
+app.get('/', (req, res) => {
+  res.json({ message: '🚀 Сервер карты Якутии работает!' });
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Сервер запущен на http://localhost:${PORT}`);
-  console.log(`📊 Данные для ${Object.keys(allDistricts).length} районов`);
-  console.log(`🌐 Проверьте работу:`);
-  console.log(`   http://localhost:${PORT}/`);
-  console.log(`   http://localhost:${PORT}/api/districts`);
-  console.log(`   http://localhost:${PORT}/api/district/Якутск`);
 });
-
-module.exports = app;
