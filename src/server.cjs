@@ -55,65 +55,70 @@ app.get('/api/district/:id', (req, res) => {
   });
 });
 
-// 4. Получить данные района с группировкой
+// API: Получить информацию о районе (ИСПРАВЛЕНО ДЛЯ SQLITE)
+app.get('/api/district/:id', (req, res) => {
+  const { id } = req.params;
+  
+  db.get('SELECT * FROM districts WHERE id = ? OR name = ?', [id, id], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Район не найден' });
+    
+    // Возвращаем данные района из базы
+    res.json(row);
+  });
+});
+
+// API: Получить данные района для графиков (Исправлено для работы с SQLite)
 app.get('/api/district/:id/data', (req, res) => {
   const { id } = req.params;
-  const { startDate, endDate } = req.query;
 
-  // Сначала находим правильный внутренний ID района (цифру или строку)
+  // 1. Ищем район в базе данных (и по английскому ID, и по русскому названию)
   db.get('SELECT id FROM districts WHERE id = ? OR name = ?', [id, id], (err, district) => {
-    if (err || !district) return res.json({ indicators: {}, summary: {}, statistics: {} });
+    if (err) return res.status(500).json({ error: err.message });
+    if (!district) return res.status(404).json({ error: 'Район не найден' });
 
-    let sql = `
-      SELECT i.name as indicator_name, c.name as category_name, dv.date, dv.value, i.unit, dv.source
+    // 2. Достаем данные из таблиц data_values, indicators и indicator_categories
+    const sql = `
+      SELECT 
+        c.name as category_name, 
+        i.name as indicator_name, 
+        dv.date, 
+        dv.value, 
+        i.unit, 
+        dv.source
       FROM data_values dv
       JOIN indicators i ON dv.indicator_id = i.id
       JOIN indicator_categories c ON i.category_id = c.id
       WHERE dv.district_id = ?
+      ORDER BY dv.date ASC
     `;
-    const params = [district.id];
 
-    if (startDate && endDate) {
-      sql += " AND dv.date BETWEEN ? AND ?";
-      params.push(startDate, endDate);
-    }
-    sql += " ORDER BY dv.date ASC";
-
-    db.all(sql, params, (err, rows) => {
+    db.all(sql, [district.id], (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
 
+      // 3. Группируем данные для фронтенда
       const indicators = {};
       rows.forEach(row => {
-        if (!indicators[row.category_name]) indicators[row.category_name] = {};
-        if (!indicators[row.category_name][row.indicator_name]) indicators[row.category_name][row.indicator_name] = [];
-        indicators[row.category_name][row.indicator_name].push({
-          date: row.date, value: row.value, unit: row.unit, source: row.source
-        });
-      });
+        const type = row.category_name || 'Общие';
+        const name = row.indicator_name || 'Показатель';
 
-      const summary = {};
-      Object.keys(indicators).forEach(cat => {
-        summary[cat] = {};
-        Object.keys(indicators[cat]).forEach(ind => {
-          const vals = indicators[cat][ind].map(v => v.value);
-          summary[cat][ind] = {
-            stats: {
-              latest: vals[vals.length - 1],
-              avg: vals.reduce((a, b) => a + b, 0) / vals.length,
-              min: Math.min(...vals),
-              max: Math.max(...vals),
-              unit: indicators[cat][ind][0].unit
-            }
-          };
+        if (!indicators[type]) indicators[type] = {};
+        if (!indicators[type][name]) indicators[type][name] = [];
+
+        indicators[type][name].push({
+          date: row.date,
+          value: row.value,
+          unit: row.unit,
+          source: row.source
         });
       });
 
       res.json({
-        indicators, summary,
+        indicators,
         statistics: {
           total_indicators: rows.length,
-          earliest_date: rows[0]?.date,
-          latest_date: rows[rows.length - 1]?.date
+          earliest_date: rows.length > 0 ? rows[0].date : null,
+          latest_date: rows.length > 0 ? rows[rows.length - 1].date : null
         }
       });
     });

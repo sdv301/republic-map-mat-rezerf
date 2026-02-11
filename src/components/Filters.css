@@ -30,6 +30,7 @@
   box-shadow: var(--shadow);
   transition: all 0.3s ease;
   z-index: 1200;
+  color: #8b5cf6;
 }
 
 .panel-toggle:hover {

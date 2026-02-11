@@ -76,19 +76,20 @@ const Map = ({ filters, onDistrictClick, setDistrictData }) => {
 
   const onEachFeature = (feature, layer) => {
       const props = feature.properties;
-      
-      // ИЩЕМ ИМЯ ПО ВСЕМ ВОЗМОЖНЫМ СТАНДАРТНЫМ КЛЮЧАМ GEOJSON
-      const name = props.district || props.name || props.NAME_2 || props.NAME_1 || 'Неизвестный район';
+      // ВАЖНО: Ищем имя по всем возможным полям внутри файла GeoJSON
+      const name = props.name || props.NAME_1 || props.NAME_2 || props.district || 'Район';
       const id = props.id || feature.id || name;
 
       layer.bindPopup(name);
       layer.on('click', () => {
+        console.log("Клик по карте! Передаем район:", name); // Поможет нам, если что, проверить ошибку через F12
         onDistrictClick({ 
-          id: name, // Этот id потом обрабатывается в App.jsx (nameToId)
+          id: name, 
           name: name 
         });
       });
     };
+
   return (
     <MapContainer 
       center={[66.0, 129.0]} 
