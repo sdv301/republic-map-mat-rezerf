@@ -8,11 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node src/server.cjs",
-    "dev:all": "concurrently \"npm run dev\" \"npm run server\""
+    "dev:all": "npx concurrently \"npm run dev\" \"npm run server\""
   },
   "dependencies": {
     "@2gis/mapgl": "^1.67.0",
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "express": "^5.2.1",
     "leaflet": "^1.9.4",
     "maplibre-gl": "^5.15.0",
@@ -20,8 +20,8 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-leaflet": "^5.0.0",
-    "recharts": "^3.6.0",
-    "sqlite3": "^5.1.7",
+    "recharts": "^3.7.0",
+    "sqlite3": "^5.0.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

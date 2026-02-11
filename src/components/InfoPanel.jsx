@@ -6,8 +6,7 @@ import {
 } from 'recharts';
 import './InfoPanel.css';
 
-// Константы вынесены наружу
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#ec4899'];
 const DEFAULT_FILTERS = {
   startDate: '2020-01-01',
   endDate: '2023-12-31',
@@ -20,70 +19,60 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
   const [additionalInfo, setAdditionalInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
-  const [selectedIndicator, setSelectedIndicator] = useState('population');
+  
+  // ИСПРАВЛЕНИЕ: Теперь мы работаем с категориями, а не жестко заданным 'population'
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Инициализация после монтирования
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsInitialized(true);
-    }, 100);
+    const timer = setTimeout(() => setIsInitialized(true), 100);
     return () => clearTimeout(timer);
   }, []);
 
-  // Сворачиваем панель, если развернуты фильтры
+  // ИСПРАВЛЕНИЕ: Автоматически разворачиваем панель при выборе нового района на карте
   useEffect(() => {
-    if (isFiltersExpanded && isExpanded) {
-      togglePanel();
+    if (district?.id) {
+      setIsExpanded(true);
+      if (onPanelToggle) onPanelToggle(true);
     }
+  }, [district?.id]);
+
+  useEffect(() => {
+    if (isFiltersExpanded && isExpanded) togglePanel();
   }, [isFiltersExpanded, isExpanded]);
 
-  // Мемоизированные вычисления
-  const effectiveFilters = useMemo(() => ({ 
-    ...DEFAULT_FILTERS, 
-    ...filters 
-  }), [filters]);
+  const effectiveFilters = useMemo(() => ({ ...DEFAULT_FILTERS, ...filters }), [filters]);
 
-  const categoryLabels = useMemo(() => ({
-    geography: 'География',
-    economy: 'Экономика',
-    demographics: 'Демография'
-  }), []);
-
-  // Оптимизированная загрузка данных
   useEffect(() => {
     if (!district?.id) {
-      setDistrictInfo(null);
-      setDistrictData(null);
-      setAdditionalInfo(null);
+      setDistrictInfo(null); setDistrictData(null); setAdditionalInfo(null);
       return;
     }
 
     const loadData = async () => {
       setLoading(true);
-      
       try {
         const encodedId = encodeURIComponent(district.id);
-        
-        // Параллельная загрузка всех данных
         const [infoRes, dataRes, additionalRes] = await Promise.allSettled([
           fetch(`http://localhost:5000/api/district/${encodedId}`),
-          fetch(`http://localhost:5000/api/district/${encodedId}/data?${new URLSearchParams({
-            startDate: effectiveFilters.startDate,
-            endDate: effectiveFilters.endDate,
-            indicatorType: effectiveFilters.dataType === 'all' ? 'all' : selectedIndicator
-          })}`),
+          fetch(`http://localhost:5000/api/district/${encodedId}/data?startDate=${effectiveFilters.startDate}&endDate=${effectiveFilters.endDate}`),
           fetch(`http://localhost:5000/api/district/${encodedId}/info`)
         ]);
 
-        // Обработка результатов
         if (infoRes.status === 'fulfilled' && infoRes.value.ok) {
           setDistrictInfo(await infoRes.value.json());
         }
 
         if (dataRes.status === 'fulfilled' && dataRes.value.ok) {
-          setDistrictData(await dataRes.value.json());
+          const data = await dataRes.value.json();
+          setDistrictData(data);
+          
+          // ИСПРАВЛЕНИЕ: Автоматически выбираем первую доступную категорию из базы
+          if (data.indicators) {
+            const categories = Object.keys(data.indicators);
+            if (categories.length > 0) setSelectedCategory(categories[0]);
+          }
         }
 
         if (additionalRes.status === 'fulfilled' && additionalRes.value.ok) {
@@ -98,76 +87,55 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
     };
 
     loadData();
-  }, [district, effectiveFilters, selectedIndicator]);
+  }, [district, effectiveFilters]);
 
-  // Оптимизированная подготовка данных для графиков
+  // ИСПРАВЛЕНИЕ: Корректное формирование данных для Recharts
   const chartData = useMemo(() => {
-    if (!districtData?.indicators?.[selectedIndicator]) return [];
+    if (!districtData?.indicators || !selectedCategory || !districtData.indicators[selectedCategory]) return [];
     
-    return Object.entries(districtData.indicators[selectedIndicator])
-      .flatMap(([name, values]) => 
-        values.map(item => ({
-          name: item.date?.substring(0, 7) || 'N/A',
-          [name]: item.value,
-          date: item.date
-        }))
-      );
-  }, [districtData, selectedIndicator]);
+    const dateMap = {};
+    Object.entries(districtData.indicators[selectedCategory]).forEach(([indicatorName, values]) => {
+      values.forEach(item => {
+        const dateKey = item.date?.substring(0, 7) || item.date || 'N/A';
+        if (!dateMap[dateKey]) dateMap[dateKey] = { name: dateKey, date: item.date };
+        dateMap[dateKey][indicatorName] = item.value;
+      });
+    });
+    
+    return Object.values(dateMap).sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [districtData, selectedCategory]);
 
-  const summary = districtData?.summary?.[selectedIndicator];
+  const summary = districtData?.summary?.[selectedCategory];
 
-  // Обработчики событий
-  const handleIndicatorChange = useCallback((e) => {
-    setSelectedIndicator(e.target.value);
-  }, []);
-
-  const handleTabChange = useCallback((tab) => {
-    setActiveTab(tab);
-  }, []);
-
+  const handleCategoryChange = useCallback((e) => setSelectedCategory(e.target.value), []);
+  const handleTabChange = useCallback((tab) => setActiveTab(tab), []);
+  
   const togglePanel = useCallback(() => {
     const newState = !isExpanded;
     setIsExpanded(newState);
-    if (onPanelToggle) {
-      onPanelToggle(newState);
-    }
+    if (onPanelToggle) onPanelToggle(newState);
   }, [isExpanded, onPanelToggle]);
 
-  // Обработчик клика по свернутой панели
   const handleCollapsedClick = useCallback((e) => {
     e.stopPropagation();
-    if (!isExpanded) {
-      togglePanel();
-    }
+    if (!isExpanded) togglePanel();
   }, [isExpanded, togglePanel]);
 
-  // Если не инициализировано, не рендерим ничего
-  if (!isInitialized) {
-    return null;
-  }
+  if (!isInitialized) return null;
 
-  // Рендер пустого состояния
+  const displayDistrictName = districtInfo?.name || district?.name || 'Район';
+
   if (!district?.id) {
     return (
       <div className={`info-panel empty ${isExpanded ? 'expanded' : 'collapsed'}`}>
-        <button 
-          className="panel-toggle-btn"
-          onClick={togglePanel}
-          title={isExpanded ? "Свернуть панель" : "Информация"}
-        >
-          <span className="toggle-icon">
-            {isExpanded ? '←' : '💡'}
-          </span>
+        <button className="panel-toggle-btn" onClick={togglePanel} title={isExpanded ? "Свернуть" : "Информация"}>
+          <span className="toggle-icon">{isExpanded ? '→' : '💡'}</span>
         </button>
-
         {!isExpanded && (
           <div className="collapsed-view" onClick={handleCollapsedClick}>
-            <div className="collapsed-content">
-              <div className="collapsed-title">Информация</div>
-            </div>
+            <div className="collapsed-content"><div className="collapsed-title">Информация</div></div>
           </div>
         )}
-
         {isExpanded && (
           <div className="expanded-view">
             <div className="empty-state">
@@ -180,32 +148,23 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
     );
   }
 
-  // Рендер загрузки
   if (loading) {
     return (
       <div className={`info-panel loading ${isExpanded ? 'expanded' : 'collapsed'}`}>
-        <button 
-          className="panel-toggle-btn"
-          onClick={togglePanel}
-          title={isExpanded ? "Свернуть панель" : "Информация"}
-        >
-          <span className="toggle-icon">
-            {isExpanded ? '←' : '💡'}
-          </span>
+        <button className="panel-toggle-btn" onClick={togglePanel} title={isExpanded ? "Свернуть" : "Информация"}>
+          <span className="toggle-icon">{isExpanded ? '→' : '💡'}</span>
         </button>
-
         {!isExpanded && (
           <div className="collapsed-view" onClick={handleCollapsedClick}>
             <div className="collapsed-content">
               <div className="collapsed-title">Информация</div>
               <div className="collapsed-district">
                 <span className="district-icon">📍</span>
-                <span className="district-name">{district.name}</span>
+                <span className="district-name">{displayDistrictName}</span>
               </div>
             </div>
           </div>
         )}
-
         {isExpanded && (
           <div className="expanded-view">
             <div className="spinner"></div>
@@ -216,44 +175,18 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
     );
   }
 
-  // Вспомогательные рендер-функции
   const renderStats = () => (
     <div className="stats-grid">
       <div className="stat-card">
         <div className="stat-label">Население</div>
-        <div className="stat-value">
-          {districtInfo?.population?.toLocaleString() || 'Н/Д'}
-        </div>
+        <div className="stat-value">{districtInfo?.population?.toLocaleString() || 'Н/Д'}</div>
         <div className="stat-unit">человек</div>
       </div>
-      
       <div className="stat-card">
         <div className="stat-label">Площадь</div>
-        <div className="stat-value">
-          {districtInfo?.area_km2?.toLocaleString() || 'Н/Д'}
-        </div>
+        <div className="stat-value">{districtInfo?.area_km2?.toLocaleString() || 'Н/Д'}</div>
         <div className="stat-unit">км²</div>
       </div>
-      
-      {districtData?.statistics && (
-        <>
-          <div className="stat-card">
-            <div className="stat-label">Показателей</div>
-            <div className="stat-value">{districtData.statistics.total_indicators || 0}</div>
-            <div className="stat-unit">ед.</div>
-          </div>
-          
-          <div className="stat-card">
-            <div className="stat-label">Период данных</div>
-            <div className="stat-value">
-              {districtData.statistics.earliest_date ? 
-                `${districtData.statistics.earliest_date.substring(0,4)}-${districtData.statistics.latest_date.substring(0,4)}` : 
-                'Н/Д'}
-            </div>
-            <div className="stat-unit">годы</div>
-          </div>
-        </>
-      )}
     </div>
   );
 
@@ -276,20 +209,19 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
         return (
           <div className="data-section">
             <div className="indicator-selector">
-              <label>Показатель:</label>
-              <select value={selectedIndicator} onChange={handleIndicatorChange}>
+              <label>Категория:</label>
+              <select value={selectedCategory || ''} onChange={handleCategoryChange}>
                 {districtData?.indicators ? 
-                  Object.keys(districtData.indicators).map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  )) :
-                  <option value="population">Население</option>
+                  Object.keys(districtData.indicators).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  )) : <option value="">Нет данных</option>
                 }
               </select>
             </div>
 
-            {districtData?.indicators?.[selectedIndicator] ? (
+            {districtData?.indicators?.[selectedCategory] ? (
               <div className="indicators-list">
-                {Object.entries(districtData.indicators[selectedIndicator]).map(([name, values]) => (
+                {Object.entries(districtData.indicators[selectedCategory]).map(([name, values]) => (
                   <div key={name} className="indicator-item">
                     <div className="indicator-header">
                       <h4>{name}</h4>
@@ -307,11 +239,7 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
                   </div>
                 ))}
               </div>
-            ) : (
-              <div className="no-data">
-                <p>Нет данных для выбранного показателя</p>
-              </div>
-            )}
+            ) : <div className="no-data"><p>Нет данных для этой категории</p></div>}
           </div>
         );
 
@@ -321,25 +249,16 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
             {additionalInfo && Object.keys(additionalInfo).length > 0 ? (
               Object.entries(additionalInfo).map(([category, items]) => (
                 <div key={category} className="info-category">
-                  <h3>{categoryLabels[category] || category}</h3>
+                  <h3>{category}</h3>
                   {items.map((item, idx) => (
                     <div key={idx} className="info-item">
                       <h4>{item.title}</h4>
                       <p>{item.content}</p>
-                      {item.updatedAt && (
-                        <div className="info-meta">
-                          Обновлено: {new Date(item.updatedAt).toLocaleDateString()}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
               ))
-            ) : (
-              <div className="no-data">
-                <p>Дополнительная информация отсутствует</p>
-              </div>
-            )}
+            ) : <div className="no-data"><p>Дополнительная информация отсутствует</p></div>}
           </div>
         );
 
@@ -347,12 +266,11 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
         return (
           <div className="charts-section">
             <div className="chart-controls">
-              <select value={selectedIndicator} onChange={handleIndicatorChange}>
+              <select value={selectedCategory || ''} onChange={handleCategoryChange} style={{padding: '8px', borderRadius: '4px'}}>
                 {districtData?.indicators ? 
-                  Object.keys(districtData.indicators).map(type => (
-                    <option key={type} value={type}>{type}</option>
-                  )) :
-                  <option value="population">Население</option>
+                  Object.keys(districtData.indicators).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  )) : <option value="">Нет данных</option>
                 }
               </select>
             </div>
@@ -360,7 +278,7 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
             {chartData.length > 0 ? (
               <>
                 <div className="chart-container">
-                  <h4>Динамика показателей</h4>
+                  <h4>Динамика: {selectedCategory}</h4>
                   <ResponsiveContainer width="100%" height={250}>
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" />
@@ -368,16 +286,9 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      {districtData?.indicators[selectedIndicator] && 
-                        Object.keys(districtData.indicators[selectedIndicator]).map((key, index) => (
-                          <Line 
-                            key={key}
-                            type="monotone" 
-                            dataKey={key} 
-                            stroke={COLORS[index % COLORS.length]}
-                            strokeWidth={2}
-                            dot={{ r: 4 }}
-                          />
+                      {districtData?.indicators[selectedCategory] && 
+                        Object.keys(districtData.indicators[selectedCategory]).map((key, index) => (
+                          <Line key={key} type="monotone" dataKey={key} stroke={COLORS[index % COLORS.length]} strokeWidth={2} dot={{ r: 4 }} />
                         ))
                       }
                     </LineChart>
@@ -393,14 +304,8 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
                           <div key={indicator} className="summary-card">
                             <h5>{indicator}</h5>
                             <div className="summary-stats">
-                              <div>
-                                <span>Текущее:</span>
-                                <strong>{data.stats.latest?.toLocaleString()} {data.stats.unit}</strong>
-                              </div>
-                              <div>
-                                <span>Среднее:</span>
-                                <strong>{data.stats.avg?.toFixed(1)} {data.stats.unit}</strong>
-                              </div>
+                              <div><span>Текущее:</span><strong>{data.stats.latest?.toLocaleString()} {data.stats.unit}</strong></div>
+                              <div><span>Среднее:</span><strong>{data.stats.avg?.toFixed(1)} {data.stats.unit}</strong></div>
                               <div>
                                 <span>Изменение:</span>
                                 <strong className={data.stats.max - data.stats.min > 0 ? 'positive' : 'negative'}>
@@ -415,92 +320,83 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
                   </div>
                 )}
               </>
-            ) : (
-              <div className="no-data">
-                <p>Нет данных для построения графиков</p>
-              </div>
-            )}
+            ) : <div className="no-data"><p>Нет данных для построения графиков</p></div>}
           </div>
         );
 
-      default:
-        return null;
+      default: return null;
     }
   };
 
   return (
     <div className={`info-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
-      {/* Кнопка переключения */}
-      <button 
-        className="panel-toggle-btn"
-        onClick={togglePanel}
-        title={isExpanded ? "Свернуть панель" : "Информация о районе"}
-      >
-        <span className="toggle-icon">
-          {isExpanded ? '←' : '💡'}
-        </span>
+      <button className="panel-toggle-btn" onClick={togglePanel} title={isExpanded ? "Свернуть" : "Развернуть"}>
+        <span className="toggle-icon">{isExpanded ? '→' : '💡'}</span>
       </button>
 
-      {/* Свернутый вид */}
       {!isExpanded && (
         <div className="collapsed-view" onClick={handleCollapsedClick}>
           <div className="collapsed-content">
             <div className="collapsed-title">Информация</div>
             <div className="collapsed-district">
               <span className="district-icon">📍</span>
-              <span className="district-name">{districtInfo?.name || district.name || 'Район'}</span>
+              <span className="district-name">{displayDistrictName}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Развернутый вид */}
       {isExpanded && (
         <div className="expanded-view">
-          {/* Заголовок */}
           <div className="panel-header">
-            <h2>{districtInfo?.name || district.name || 'Район'}</h2>
+            <h2>{displayDistrictName}</h2>
             <div className="district-meta">
-              {districtInfo?.code && <span className="badge">Код: {districtInfo.code}</span>}
               {districtInfo?.capital && <span className="badge">Адм. центр: {districtInfo.capital}</span>}
             </div>
           </div>
 
-          {/* Вкладки */}
           <div className="tabs">
             {['overview', 'data', 'info', 'charts'].map(tab => (
-              <button
-                key={tab}
-                className={activeTab === tab ? 'active' : ''}
-                onClick={() => handleTabChange(tab)}
-              >
-                {tab === 'overview' ? 'Обзор' :
-                 tab === 'data' ? 'Данные' :
-                 tab === 'info' ? 'Информация' : 'Графики'}
+              <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => handleTabChange(tab)}>
+                {tab === 'overview' ? 'Обзор' : tab === 'data' ? 'Данные' : tab === 'info' ? 'Инфо' : 'Графики'}
               </button>
             ))}
           </div>
 
-          {/* Контент вкладок */}
-          <div className="tab-content">
-            {renderTabContent()}
-          </div>
-
-          {/* Футер */}
-          {districtData?.statistics && (
-            <div className="panel-footer">
-              <small>
-                {districtData.statistics.earliest_date && 
-                  `Данные за период: ${districtData.statistics.earliest_date} — ${districtData.statistics.latest_date}`}
-                {districtData.statistics.total_indicators && 
-                  ` • ${districtData.statistics.total_indicators} показателей`}
-              </small>
-            </div>
-          )}
+          <div className="tab-content">{renderTabContent()}</div>
         </div>
       )}
     </div>
   );
 };
 
-export default InfoPanel;
+class PanelErrorBoundary extends React.Component {
+  constructor(props) { 
+    super(props); 
+    this.state = { hasError: false, error: null }; 
+  }
+  
+  static getDerivedStateFromError(error) { 
+    return { hasError: true, error }; 
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ position: 'fixed', top: '60px', right: 0, width: '400px', height: '100%', background: '#1e293b', color: '#f1f5f9', padding: '30px', zIndex: 9999, borderLeft: '2px solid #ef4444' }}>
+          <h3 style={{ color: '#ef4444' }}>💥 Ошибка компонента</h3>
+          <p style={{ fontSize: '14px', color: '#94a3b8' }}>{this.state.error.toString()}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function SafeInfoPanel(props) {
+  return (
+    <PanelErrorBoundary>
+      <InfoPanel {...props} />
+    </PanelErrorBoundary>
+  );
+}

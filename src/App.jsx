@@ -7,12 +7,11 @@ import './App.css';
 
 function App() {
   const [filters, setFilters] = useState({
-    start: '',
-    end: '',
-    specific: ''
+    startDate: '2020-01-01',
+    endDate: '2023-12-31',
+    dataType: 'all'
   });
   const [selectedDistrict, setSelectedDistrict] = useState(null);
-  const [districtData, setDistrictData] = useState(null);
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
 
   const handleFilterChange = useCallback((newFilters) => {
@@ -20,9 +19,49 @@ function App() {
   }, []);
 
   const handleDistrictSelect = useCallback((district) => {
-    setSelectedDistrict(prev => 
-      prev?.id === district.id && prev?.name === district.name ? prev : district
-    );
+    // В новой БД используем id, которые соответствуют ключам (yakutsk, aldansky и т.д.)
+    // Нам нужно сопоставить русское название из GeoJSON с ID
+    const nameToId = {
+      'город Якутск': 'yakutsk',
+      'Жатай': 'zhatay',
+      'Абыйский район': 'abysky',
+      'Алданский район': 'aldansky',
+      'Аллаиховский район': 'allaikhovsky',
+      'Амгинский район': 'amginsky',
+      'Анабарский район': 'anabarsky',
+      'Булунский район': 'bulunsky',
+      'Верхневилюйский район': 'verkhnevilyuysky',
+      'Верхнеколымский район': 'verkhnekolymsky',
+      'Верхоянский район': 'verkhoyansky',
+      'Вилюйский район': 'vilyuysky',
+      'Горный район': 'gorny',
+      'Жиганский район': 'zhigansky',
+      'Кобяйский район': 'kobyaysky',
+      'Ленский район': 'lensky',
+      'Мегино-Кангаласский район': 'megino-kangalassky',
+      'Мирнинский район': 'mirninsky',
+      'Момский район': 'omsky',
+      'Намский район': 'namsky',
+      'Нерюнгринский район': 'neryungrinsky',
+      'Нижнеколымский район': 'nizhnekolymsky',
+      'Нюрбинский район': 'nyurbinsky',
+      'Оймяконский район': 'oymyakonsky',
+      'Олёкминский район': 'olekminsky',
+      'Оленёкский район': 'olenek',
+      'Среднеколымский район': 'srednekolymsky',
+      'Сунтарский район': 'suntarsky',
+      'Таттинский район': 'tattinsky',
+      'Томпонский район': 'tomponsky',
+      'Усть-Алданский район': 'ust-aldansky',
+      'Усть-Майский район': 'ust-maysky',
+      'Усть-Янский район': 'ust-yansky',
+      'Хангаласский район': 'khangalassky',
+      'Чурапчинский район': 'churapchinsky',
+      'Эвено-Бытантайский район': 'eveno-bytantaysky'
+    };
+
+    const id = nameToId[district.name] || district.id;
+    setSelectedDistrict({ id, name: district.name });
   }, []);
 
   const handleFiltersToggle = useCallback((expanded) => {
@@ -41,7 +80,6 @@ function App() {
         filters={filters} 
         setFilters={handleFilterChange}
         selectedDistrict={selectedDistrict}
-        districtData={districtData}
         onPanelToggle={handleFiltersToggle}
       />
       
@@ -56,7 +94,6 @@ function App() {
         <InfoPanel 
           district={selectedDistrict} 
           filters={filters}
-          setDistrictData={setDistrictData}
           isFiltersExpanded={isFiltersExpanded}
           onPanelToggle={handleInfoPanelToggle}
         />

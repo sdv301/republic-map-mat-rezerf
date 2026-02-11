@@ -75,20 +75,20 @@ const Map = ({ filters, onDistrictClick, setDistrictData }) => {
   };
 
   const onEachFeature = (feature, layer) => {
-    const props = feature.properties;
-    const name = props.district || 'Район';
-    const id = props.id || feature.id || name;
+      const props = feature.properties;
+      
+      // ИЩЕМ ИМЯ ПО ВСЕМ ВОЗМОЖНЫМ СТАНДАРТНЫМ КЛЮЧАМ GEOJSON
+      const name = props.district || props.name || props.NAME_2 || props.NAME_1 || 'Неизвестный район';
+      const id = props.id || feature.id || name;
 
-    layer.bindPopup(name);
-    layer.on('click', () => {
-      // Передаем объект с id и name
-      onDistrictClick({ 
-        id: name, // Русское название как id для тестового сервера
-        name: name 
+      layer.bindPopup(name);
+      layer.on('click', () => {
+        onDistrictClick({ 
+          id: name, // Этот id потом обрабатывается в App.jsx (nameToId)
+          name: name 
+        });
       });
-    });
-  };
-
+    };
   return (
     <MapContainer 
       center={[66.0, 129.0]} 
@@ -102,7 +102,7 @@ const Map = ({ filters, onDistrictClick, setDistrictData }) => {
       />
       <SetBounds bounds={yakutiaBounds} />
 
-      {geojson && <GeoJSON data={geojson} onEachFeature={onEachFeature} style={{ color: '#0000ff', weight: 3, fillOpacity: 0.2 }} />}
+      {geojson && <GeoJSON data={geojson} onEachFeature={onEachFeature} style={{ color: '#38bdf8', weight: 1.5, fillColor: '#1e293b', fillOpacity: 0.4 }} />}
 
 
     </MapContainer>

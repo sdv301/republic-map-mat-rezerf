@@ -1,144 +1,196 @@
 /* src/components/InfoPanel.css */
+:root {
+  /* ТУТ МЕНЯЕШЬ ОСНОВНОЙ ЦВЕТ. Сейчас стоит приятный голубой, можно поменять на #10b981 (изумрудный) или любой другой */
+  --primary-color: #38bdf8; 
+  --accent-color: #8b5cf6;
+  --text-primary: #f8fafc; /* Светлый текст */
+  --text-secondary: #94a3b8; /* Сероватый текст для подписей */
+  --border-color: rgba(255, 255, 255, 0.1);
+  --panel-bg: rgba(15, 23, 42, 0.75); /* Тёмное полупрозрачное стекло */
+  --transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Панель парит над картой справа */
 .info-panel {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  bottom: 10px;
-  width: 400px;
-  background: white;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  border-radius: 12px;
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  bottom: 20px;
+  width: 380px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  box-shadow: -10px 10px 30px rgba(0, 0, 0, 0.4);
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s ease, width 0.3s ease, opacity 0.3s ease;
-  z-index: 1000;
-  overflow: hidden;
+  z-index: 1010;
+  transition: var(--transition);
 }
 
+/* Свернутое состояние - прячем за край экрана */
 .info-panel.collapsed {
-  transform: translateX(calc(100% - 40px));
-  width: 400px; /* Сохраняем ширину для плавности, но прячем за край */
+  transform: translateX(calc(100% + 30px));
 }
 
-/* Кнопка сворачивания */
-.panel-toggle-btn {
+/* Развернутое состояние */
+.info-panel.expanded {
+  transform: translateX(0);
+}
+
+/* Кнопка открытия (торчит сбоку, когда панель скрыта) */
+.info-panel .panel-toggle-btn {
   position: absolute;
-  left: 0;
   top: 50%;
+  left: -48px;
   transform: translateY(-50%);
-  width: 40px;
-  height: 60px;
-  background: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 8px 0 0 8px;
+  width: 48px;
+  height: 80px;
+  background: var(--panel-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  border-right: none;
+  border-radius: 16px 0 0 16px;
+  color: var(--primary-color);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  z-index: 10;
-  box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+  box-shadow: -5px 0 15px rgba(0,0,0,0.2);
+  transition: all 0.3s ease;
+  z-index: 1020;
 }
 
-.panel-toggle-btn:hover {
-  background: #1976D2;
+.info-panel.collapsed .panel-toggle-btn {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(139, 92, 246, 0.2));
+  border: 1px solid var(--primary-color);
+  border-right: none;
+  color: var(--primary-color);
+  animation: gentlePulse 2s infinite;
 }
 
-/* Содержимое панели */
-.expanded-view {
-  flex: 1;
+@keyframes gentlePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
+  50% { box-shadow: -5px 0 15px 5px rgba(56, 189, 248, 0.1); }
+}
+
+.info-panel .expanded-view {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding-left: 40px; /* Место для кнопки */
   overflow: hidden;
+  border-radius: 20px;
 }
 
-.panel-header {
-  padding: 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #eee;
+/* Шапка панели */
+.info-panel .panel-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.panel-header h2 {
-  margin: 0 0 10px 0;
-  font-size: 1.5rem;
-  color: #333;
+.info-panel .panel-header h2 {
+  margin: 0 0 12px 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
-.tabs {
+/* Вкладки */
+.info-panel .tabs {
   display: flex;
-  background: #eee;
-  padding: 5px;
+  margin: 16px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
 }
 
-.tabs button {
+.info-panel .tabs button {
   flex: 1;
-  padding: 8px;
+  padding: 10px;
   border: none;
-  background: transparent;
+  background: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 4px;
-  font-weight: 500;
+  transition: all 0.3s ease;
 }
 
-.tabs button.active {
-  background: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.info-panel .tabs button.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--primary-color);
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
-.tab-content {
+/* Внутренний контент */
+.info-panel .tab-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 0 24px 24px;
 }
 
-/* Статистика */
-.stats-grid {
+/* Карточки статов */
+.info-panel .stats-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
   margin-bottom: 20px;
 }
 
-.stat-card {
-  background: #f1f8ff;
-  padding: 15px;
-  border-radius: 8px;
+.info-panel .stat-card {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 16px;
   text-align: center;
+  transition: transform 0.2s ease;
 }
 
-.stat-label {
-  font-size: 0.8rem;
-  color: #666;
-  margin-bottom: 5px;
+.info-panel .stat-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--primary-color);
 }
 
-.stat-value {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: #0d47a1;
+.info-panel .stat-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; }
+.info-panel .stat-value { font-size: 24px; font-weight: 700; color: var(--primary-color); margin: 8px 0; }
+.info-panel .stat-unit { font-size: 12px; color: var(--text-secondary); }
+
+/* Селекторы, графики */
+.info-panel select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 16px;
+  background: rgba(0,0,0,0.3);
+  color: var(--text-primary);
+  outline: none;
+}
+.info-panel select:focus { border-color: var(--primary-color); }
+
+.info-panel .chart-container {
+  background: rgba(0,0,0,0.2);
+  padding: 16px;
+  border-radius: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-color);
 }
 
-.stat-unit {
-  font-size: 0.7rem;
-  color: #999;
-}
+/* Скроллбар */
+.info-panel .tab-content::-webkit-scrollbar { width: 4px; }
+.info-panel .tab-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
 
-/* Графики */
-.chart-container {
-  height: 300px;
-  margin-top: 20px;
-}
-
-.empty-state {
+/* Состояние пустой панели и загрузки */
+.empty-state, .loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
   text-align: center;
-  color: #999;
+  color: var(--text-secondary);
   padding: 20px;
 }

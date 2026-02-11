@@ -1,179 +1,220 @@
 <!-- admin.html -->
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-  <title>Админка - Добавление данных</title>
+  <meta charset="UTF-8">
+  <title>Управление данными - Карта Якутии</title>
   <style>
-    body { font-family: Arial; padding: 20px; }
-    .form-group { margin: 15px 0; }
-    label { display: block; margin-bottom: 5px; }
-    input, select, textarea { width: 300px; padding: 8px; }
-    button { padding: 10px 20px; background: #4CAF50; color: white; border: none; cursor: pointer; }
-    .success { color: green; margin: 10px 0; }
-    .error { color: red; margin: 10px 0; }
+    body { 
+      font-family: -apple-system, system-ui, sans-serif; 
+      background: #f0f2f5; 
+      margin: 0; 
+      padding: 20px;
+      color: #1c1e21;
+    }
+    .container { 
+      max-width: 800px; 
+      margin: 0 auto; 
+    }
+    .block { 
+      background: #fff; 
+      padding: 25px; 
+      border-radius: 8px; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    h2 { margin-top: 0; color: #1a73e8; font-size: 1.2rem; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    
+    .form-row { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+    .form-group { flex: 1; min-width: 200px; display: flex; flex-direction: column; }
+    label { font-size: 0.9rem; margin-bottom: 5px; font-weight: 600; color: #4b4f56; }
+    
+    input, select { 
+      padding: 8px 12px; 
+      border: 1px solid #dddfe2; 
+      border-radius: 4px; 
+      font-size: 1rem;
+    }
+    
+    button { 
+      padding: 10px 20px; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .btn-save { background: #42b72a; color: #fff; }
+    .btn-save:hover { background: #36a420; }
+    
+    .btn-excel { background: #1a73e8; color: #fff; }
+    .btn-excel:hover { background: #1557b0; }
+
+    .btn-outline { background: #fff; border: 1px solid #ddd; color: #4b4f56; }
+    .btn-outline:hover { background: #f5f6f7; }
+
+    #status { 
+      position: fixed; 
+      top: 20px; 
+      right: 20px; 
+      padding: 15px 25px; 
+      border-radius: 4px; 
+      color: #fff; 
+      display: none;
+      z-index: 1000;
+    }
+    .status-ok { background: #42b72a; }
+    .status-err { background: #fa3e3e; }
   </style>
 </head>
 <body>
-  <h1>Добавить данные в БД</h1>
-  
-  <div class="form-group">
-    <label>Район:</label>
-    <select id="districtId">
-      <option value="yakutsk">Якутск</option>
-      <option value="zhatay">Жатай</option>
-      <option value="abysky">Абыйский район</option>
-      <option value="aldansky">Алданский район</option>
-      <option value="allaikhovsky">Аллаиховский район</option>
-      <option value="amginsky">Амгинский район</option>
-      <option value="anabarsky">Анабарский район</option>
-      <option value="bulunsky">Булунский район</option>
-      <option value="verkhnevilyuysky">Верхневилюйский район</option>
-      <option value="verkhnekolymsky">Верхнеколымский район</option>
-      <option value="verkhoyansky">Верхоянский район</option>
-      <option value="vilyuysky">Вилюйский район</option>
-      <option value="gorny">Горный район</option>
-      <option value="zhigansky">Жиганский район</option>
-      <option value="kobyaysky">Кобяйский район</option>
-      <option value="lensky">Ленский район</option>
-      <option value="megino-kangalassky">Мегино-Кангаласский район</option>
-      <option value="mirninsky">Мирнинский район</option>
-      <option value="omsky">Момский район</option>
-      <option value="namsky">Намский район</option>
-      <option value="neryungrinsky">Нерюнгринский район</option>
-      <option value="nizhnekolymsky">Нижнеколымский район</option>
-      <option value="nyurbinsky">Нюрбинский район</option>
-      <option value="oymyakonsky">Оймяконский район</option>
-      <option value="olekminsky">Олёкминский район</option>
-      <option value="olenek">Оленёкский район</option>
-      <option value="srednekolymsky">Среднеколымский район</option>
-      <option value="suntarsky">Сунтарский район</option>
-      <option value="tattinsky">Таттинский район</option>
-      <option value="tomponsky">Томпонский район</option>
-      <option value="ust-aldansky">Усть-Алданский район</option>
-      <option value="ust-maysky">Усть-Майский район</option>
-      <option value="ust-yansky">Усть-Янский район</option>
-      <option value="khangalassky">Хангаласский район</option>
-      <option value="churapchinsky">Чурапчинский район</option>
-      <option value="eveno-bytantaysky">Эвено-Бытантайский район</option>
-    </select>
+
+<div class="container">
+  <h1>Панель управления</h1>
+
+  <!-- РУЧНОЙ ВВОД -->
+  <div class="block">
+    <h2>📝 Внесение данных</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Район</label>
+        <select id="districtId"></select>
+      </div>
+      <div class="form-group">
+        <label>Показатель</label>
+        <select id="indicatorId"></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Дата</label>
+        <input type="date" id="date" value="2024-01-01">
+      </div>
+      <div class="form-group">
+        <label>Значение</label>
+        <input type="number" id="value" step="0.01">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Источник</label>
+        <input type="text" id="source" placeholder="Напр: Росстат">
+      </div>
+    </div>
+    <button class="btn-save" onclick="saveData()">Сохранить в базу</button>
   </div>
 
-  <div class="form-group">
-    <label>Дата:</label>
-    <input type="date" id="date" value="2023-01-01">
+  <!-- EXCEL -->
+  <div class="block">
+    <h2>📊 Работа с Excel</h2>
+    <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px;">
+      <div class="form-group">
+        <label>Файл для загрузки</label>
+        <input type="file" id="excelFile" accept=".xlsx">
+      </div>
+      <button class="btn-excel" onclick="importExcel()">Загрузить данные</button>
+    </div>
+    <hr>
+    <div class="form-row" style="margin-top: 20px;">
+      <div class="form-group">
+        <label>С даты</label>
+        <input type="date" id="start">
+      </div>
+      <div class="form-group">
+        <label>По дату</label>
+        <input type="date" id="end">
+      </div>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button class="btn-outline" onclick="exportExcel()">Скачать отчет (Excel)</button>
+      <button class="btn-outline" onclick="location.href='/api/download-template'">Скачать шаблон</button>
+    </div>
   </div>
+</div>
 
-  <div class="form-group">
-    <label>Тип показателя:</label>
-    <select id="indicatorType">
-      <option value="population">Население</option>
-      <option value="economy">Экономика</option>
-      <option value="climate">Климат</option>
-      <option value="ecology">Экология</option>
-    </select>
-  </div>
+<div id="status"></div>
 
-  <div class="form-group">
-    <label>Название показателя:</label>
-    <input type="text" id="indicatorName" placeholder="Население">
-  </div>
+<script>
+  const API = 'http://localhost:5000/api';
 
-  <div class="form-group">
-    <label>Значение:</label>
-    <input type="number" id="value" step="0.01" placeholder="1000">
-  </div>
+  async function loadSelectors() {
+    try {
+      const [distRes, indRes] = await Promise.all([
+        fetch(`${API}/districts`),
+        fetch(`${API}/indicators`)
+      ]);
+      
+      const districts = await distRes.json();
+      const indicators = await indRes.json();
 
-  <div class="form-group">
-    <label>Единица измерения:</label>
-    <input type="text" id="unit" placeholder="чел.">
-  </div>
-
-  <div class="form-group">
-    <label>Источник:</label>
-    <input type="text" id="source" placeholder="Росстат">
-  </div>
-
-  <button onclick="addData()">Добавить данные</button>
-
-  <hr>
-
-  <h2>Загрузить из Excel</h2>
-  <div class="form-group">
-    <label>Выберите Excel файл (.xlsx, .xls):</label>
-    <input type="file" id="excelFile" accept=".xlsx, .xls">
-  </div>
-  <button onclick="uploadExcel()" style="background: #2196F3;">Загрузить Excel</button>
-  
-  <div id="message"></div>
-
-  <script>
-    async function uploadExcel() {
-      const fileInput = document.getElementById('excelFile');
-      if (!fileInput.files[0]) {
-        alert('Пожалуйста, выберите файл');
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
-
-      try {
-        document.getElementById('message').innerHTML = 'Загрузка...';
-        const response = await fetch('http://localhost:5000/api/upload-excel', {
-          method: 'POST',
-          body: formData
-        });
-
-        const result = await response.json();
-        if (result.success) {
-          document.getElementById('message').innerHTML = 
-            `<div class="success">✅ Файл успешно обработан! Добавлено записей: ${result.count}</div>`;
-        } else {
-          document.getElementById('message').innerHTML = 
-            `<div class="error">❌ Ошибка: ${result.error}</div>`;
-        }
-      } catch (error) {
-        document.getElementById('message').innerHTML = 
-          `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
-      }
+      document.getElementById('districtId').innerHTML = districts
+        .map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      
+      document.getElementById('indicatorId').innerHTML = indicators
+        .map(i => `<option value="${i.id}">${i.category} - ${i.name} (${i.unit})</option>`).join('');
+    } catch (e) {
+      notify('Ошибка загрузки справочников', true);
     }
+  }
 
-    async function addData() {
-      const data = {
-        date: document.getElementById('date').value,
-        indicator_type: document.getElementById('indicatorType').value,
-        indicator_name: document.getElementById('indicatorName').value,
-        value: parseFloat(document.getElementById('value').value),
-        unit: document.getElementById('unit').value,
-        source: document.getElementById('source').value
-      };
+  async function saveData() {
+    const data = {
+      district_id: document.getElementById('districtId').value,
+      indicator_id: parseInt(document.getElementById('indicatorId').value),
+      date: document.getElementById('date').value,
+      value: parseFloat(document.getElementById('value').value),
+      source: document.getElementById('source').value
+    };
 
-      const districtId = document.getElementById('districtId').value;
+    if (!data.value) return notify('Введите значение', true);
 
-      try {
-        const response = await fetch(`http://localhost:5000/api/district/${districtId}/data`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-          document.getElementById('message').innerHTML = 
-            `<div class="success">✅ Данные успешно добавлены!</div>`;
-          // Очищаем форму
-          document.getElementById('value').value = '';
-          document.getElementById('indicatorName').value = '';
-        } else {
-          document.getElementById('message').innerHTML = 
-            `<div class="error">❌ Ошибка: ${result.error}</div>`;
-        }
-      } catch (error) {
-        document.getElementById('message').innerHTML = 
-          `<div class="error">❌ Ошибка сети: ${error.message}</div>`;
+    try {
+      const res = await fetch(`${API}/data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (res.ok) {
+        notify('Данные сохранены');
+        document.getElementById('value').value = '';
       }
+    } catch (e) {
+      notify('Ошибка сохранения', true);
     }
-  </script>
+  }
+
+  async function importExcel() {
+    const file = document.getElementById('excelFile').files[0];
+    if (!file) return notify('Выберите файл', true);
+
+    const fd = new FormData();
+    fd.append('file', file);
+
+    try {
+      const res = await fetch(`${API}/upload-excel`, { method: 'POST', body: fd });
+      const result = await res.json();
+      if (result.success) notify(`Успешно загружено записей: ${result.count}`);
+    } catch (e) {
+      notify('Ошибка импорта', true);
+    }
+  }
+
+  function exportExcel() {
+    const s = document.getElementById('start').value;
+    const e = document.getElementById('end').value;
+    window.location.href = `${API}/export-excel?startDate=${s}&endDate=${e}`;
+  }
+
+  function notify(text, isErr = false) {
+    const el = document.getElementById('status');
+    el.innerText = text;
+    el.className = isErr ? 'status-err' : 'status-ok';
+    el.style.display = 'block';
+    setTimeout(() => el.style.display = 'none', 3000);
+  }
+
+  loadSelectors();
+</script>
+
 </body>
 </html>
