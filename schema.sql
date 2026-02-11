@@ -1,59 +1,36 @@
--- schema.sql
--- База данных для карты Республики Саха (Якутия)
-
--- 1. Справочник районов
+-- 1. Таблица районов и получателей (включая ведомства вроде ГБУ "Служба спасения")
 CREATE TABLE IF NOT EXISTS districts (
-    id TEXT PRIMARY KEY,          -- Например: 'yakutsk', 'aldansky'
-    name TEXT NOT NULL,           -- Полное название
-    code TEXT,                    -- Код (ОКТМО или внутренний)
-    population_base INTEGER,      -- Базовое население (справочно)
-    area_km2 REAL,                -- Площадь
-    capital TEXT,                 -- Адм. центр
-    description TEXT,             -- Общее описание
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,           -- Официальное название для отображения
+    geojson_name TEXT,            -- Имя для связи с картой (если это район)
+    type TEXT DEFAULT 'district'  -- 'district' (район) или 'agency' (ведомство)
 );
 
--- 2. Справочник категорий показателей
-CREATE TABLE IF NOT EXISTS indicator_categories (
+-- 2. Таблица категорий имущества
+CREATE TABLE IF NOT EXISTS item_categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE     -- 'Население', 'Экономика', 'Климат', 'Образование'
+    name TEXT NOT NULL UNIQUE -- "Продовольствие...", "Техника" и т.д.
 );
 
--- 3. Справочник самих показателей
-CREATE TABLE IF NOT EXISTS indicators (
+-- 3. Справочник номенклатуры (сами товары)
+CREATE TABLE IF NOT EXISTS items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     category_id INTEGER,
-    name TEXT NOT NULL,           -- 'Численность населения', 'ВРП', 'Средняя температура'
-    unit TEXT,                    -- 'чел.', 'млн руб.', '°C'
-    description TEXT,
-    FOREIGN KEY (category_id) REFERENCES indicator_categories (id),
-    UNIQUE(category_id, name)
+    name TEXT NOT NULL,       -- "Бензопилы", "Индивидуальный рацион питания"
+    unit TEXT,                -- "шт", "кг", "компл"
+    unit_price REAL,          -- Балансовая цена за единицу
+    FOREIGN KEY (category_id) REFERENCES item_categories(id)
 );
 
--- 4. Основная таблица значений (временные ряды)
-CREATE TABLE IF NOT EXISTS data_values (
+-- 4. Таблица распределения (Главная таблица, куда льются данные из Excel)
+CREATE TABLE IF NOT EXISTS distributions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    district_id TEXT NOT NULL,
-    indicator_id INTEGER NOT NULL,
-    date DATE NOT NULL,           -- Дата записи (например, '2023-01-01')
-    value REAL NOT NULL,          -- Числовое значение
-    source TEXT,                  -- Источник (текстом для гибкости)
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (district_id) REFERENCES districts (id),
-    FOREIGN KEY (indicator_id) REFERENCES indicators (id),
-    UNIQUE(district_id, indicator_id, date)
+    district_id TEXT NOT NULL,    -- Кому выдали (связь с districts)
+    item_id INTEGER NOT NULL,     -- Что выдали (связь с items)
+    issue_year INTEGER,           -- Год выдачи (например, 2025)
+    issue_date DATE,              -- Точная дата (если есть)
+    quantity REAL DEFAULT 0,      -- Количество
+    total_cost REAL DEFAULT 0,    -- Общая стоимость
+    FOREIGN KEY (district_id) REFERENCES districts(id),
+    FOREIGN KEY (item_id) REFERENCES items(id)
 );
-
--- 5. Дополнительная текстовая информация (статьи, факты)
-CREATE TABLE IF NOT EXISTS district_info (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    district_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (district_id) REFERENCES districts (id)
-);
-
--- Индексы для оптимизации
-CREATE INDEX IF NOT EXISTS idx_values_district_date ON data_values(district_id, date);
-CREATE INDEX IF NOT EXISTS idx_values_indicator ON data_values(indicator_id);

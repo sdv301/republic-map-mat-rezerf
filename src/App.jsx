@@ -1,5 +1,5 @@
 // src/App.jsx
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Map from './components/Map';
 import Filters from './components/Filters';
 import InfoPanel from './components/InfoPanel';
@@ -7,20 +7,34 @@ import './App.css';
 
 function App() {
   const [filters, setFilters] = useState({
-    startDate: '2020-01-01',
-    endDate: '2023-12-31',
+    startDate: '',
+    endDate: '',
     dataType: 'all'
   });
   const [selectedDistrict, setSelectedDistrict] = useState(null);
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+
+  // ДОБАВЛЕНО: Автоматически тянем самую старую и новую дату из базы при запуске
+  useEffect(() => {
+    fetch('http://localhost:5000/api/date-range')
+      .then(res => res.json())
+      .then(data => {
+        if (data.min_year && data.max_year) {
+          setFilters(prev => ({
+            ...prev,
+            startDate: `${data.min_year}-01-01`,
+            endDate: `${data.max_year}-12-31`
+          }));
+        }
+      })
+      .catch(err => console.error('Ошибка загрузки дат:', err));
+  }, []);
 
   const handleFilterChange = useCallback((newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
   }, []);
 
   const handleDistrictSelect = useCallback((district) => {
-    // В новой БД используем id, которые соответствуют ключам (yakutsk, aldansky и т.д.)
-    // Нам нужно сопоставить русское название из GeoJSON с ID
     const nameToId = {
       'город Якутск': 'yakutsk',
       'Жатай': 'zhatay',
@@ -69,9 +83,7 @@ function App() {
   }, []);
 
   const handleInfoPanelToggle = useCallback((expanded) => {
-    if (expanded) {
-      setIsFiltersExpanded(false);
-    }
+    if (expanded) setIsFiltersExpanded(false);
   }, []);
 
   return (
@@ -85,12 +97,8 @@ function App() {
       
       <div className="main">
         <div className="map-container">
-          <Map 
-            filters={filters} 
-            onDistrictClick={handleDistrictSelect}
-          />
+          <Map filters={filters} onDistrictClick={handleDistrictSelect} />
         </div>
-        
         <InfoPanel 
           district={selectedDistrict} 
           filters={filters}
@@ -98,6 +106,9 @@ function App() {
           onPanelToggle={handleInfoPanelToggle}
         />
       </div>
+
+      {/* Кнопка админки */}
+      <a href="/admin.html" className="hidden-admin-btn" title="Панель управления">⚙️</a>
     </div>
   );
 }

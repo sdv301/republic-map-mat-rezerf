@@ -1,20 +1,16 @@
 // src/components/InfoPanel.jsx
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect, useCallback } from 'react';
 import './InfoPanel.css';
 
-const COLORS = ['#38bdf8', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444'];
-const DEFAULT_FILTERS = { startDate: '2020-01-01', endDate: '2023-12-31', dataType: 'all' };
+const DEFAULT_FILTERS = { startDate: '', endDate: '' };
 
 const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle }) => {
   const [districtInfo, setDistrictInfo] = useState(null);
   const [districtData, setDistrictData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview');
-  const [selectedIndicator, setSelectedIndicator] = useState('');
+  const [activeTab, setActiveTab] = useState('inventory');
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Открываем панель при выборе района
   useEffect(() => {
     if (district?.id) {
       setIsExpanded(true);
@@ -26,34 +22,26 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
     if (isFiltersExpanded && isExpanded) togglePanel();
   }, [isFiltersExpanded]);
 
-  // Загрузка данных
   useEffect(() => {
     if (!district?.id) {
-      setDistrictInfo(null); 
-      setDistrictData(null); 
-      return;
+      setDistrictInfo(null); setDistrictData(null); return;
     }
 
     const loadData = async () => {
       setLoading(true);
       try {
         const encodedId = encodeURIComponent(district.id);
+        const start = filters.startDate || '';
+        const end = filters.endDate || '';
+
+        // ДОБАВЛЕНО: Передаем даты с фильтра в запрос
         const [infoRes, dataRes] = await Promise.allSettled([
           fetch(`http://localhost:5000/api/district/${encodedId}`),
-          fetch(`http://localhost:5000/api/district/${encodedId}/data`)
+          fetch(`http://localhost:5000/api/district/${encodedId}/data?startDate=${start}&endDate=${end}`)
         ]);
 
-        if (infoRes.status === 'fulfilled' && infoRes.value.ok) {
-          setDistrictInfo(await infoRes.value.json());
-        }
-
-        if (dataRes.status === 'fulfilled' && dataRes.value.ok) {
-          const data = await dataRes.value.json();
-          setDistrictData(data);
-          if (data.indicators && Object.keys(data.indicators).length > 0) {
-            setSelectedIndicator(Object.keys(data.indicators)[0]);
-          }
-        }
+        if (infoRes.status === 'fulfilled' && infoRes.value.ok) setDistrictInfo(await infoRes.value.json());
+        if (dataRes.status === 'fulfilled' && dataRes.value.ok) setDistrictData(await dataRes.value.json());
       } catch (error) {
         console.error('Ошибка:', error);
       } finally {
@@ -61,20 +49,7 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
       }
     };
     loadData();
-  }, [district]);
-
-  const chartData = useMemo(() => {
-    if (!districtData?.indicators?.[selectedIndicator]) return [];
-    const dateMap = {};
-    Object.entries(districtData.indicators[selectedIndicator]).forEach(([name, values]) => {
-      values.forEach(item => {
-        const dKey = item.date?.substring(0, 7) || 'N/A';
-        if (!dateMap[dKey]) dateMap[dKey] = { name: dKey, date: item.date };
-        dateMap[dKey][name] = item.value;
-      });
-    });
-    return Object.values(dateMap).sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [districtData, selectedIndicator]);
+  }, [district, filters]); // Панель будет обновляться при смене дат в фильтре!
 
   const togglePanel = useCallback(() => {
     const newState = !isExpanded;
@@ -82,13 +57,16 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
     if (onPanelToggle) onPanelToggle(newState);
   }, [isExpanded, onPanelToggle]);
 
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(value);
+  };
+
   return (
     <div className={`info-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
       <button className="panel-toggle-btn" onClick={togglePanel}>
         <span className="toggle-icon">{isExpanded ? '▶' : '◀'}</span>
       </button>
 
-      {/* УБРАЛИ лишний expanded-view, контент сразу внутри панели */}
       {!district?.id ? (
         <div className="empty-state">
           <h3>👆 Выберите район</h3>
@@ -101,18 +79,76 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
       ) : (
         <>
           <div className="panel-header">
-            <h2>{districtInfo?.name || district.name || 'Район'}</h2>
+            <h2>{districtInfo?.name || district.name}</h2>
+            {districtData?.statistics?.total_cost > 0 && (
+              <div className="total-cost-badge">
+                <small>Всего выделено МЦ:</small>
+                <strong>{formatCurrency(districtData.statistics.total_cost)}</strong>
+                
+                {/* ДОБАВЛЕНО: Отображение дат из базы */}
+                {districtData.statistics.earliest_date && (
+                  <div style={{fontSize: '11px', color: 'var(--text-secondary)', marginTop: '5px', fontWeight: '500'}}>
+                    📅 За период: {districtData.statistics.earliest_date}
+                    {districtData.statistics.earliest_date !== districtData.statistics.latest_date ? ` — ${districtData.statistics.latest_date}` : ''} гг.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="tabs">
-            {['overview', 'data', 'charts'].map(tab => (
+            {['inventory', 'overview'].map(tab => (
               <button key={tab} className={activeTab === tab ? 'active' : ''} onClick={() => setActiveTab(tab)}>
-                {tab === 'overview' ? 'Обзор' : tab === 'data' ? 'Данные' : 'Графики'}
+                {tab === 'inventory' ? 'Резервы (МЦ)' : 'Обзор района'}
               </button>
             ))}
           </div>
 
           <div className="tab-content">
+            {activeTab === 'inventory' && (
+              <div className="inventory-list">
+                {districtData?.inventory && Object.keys(districtData.inventory).length > 0 ? (
+                  Object.entries(districtData.inventory).map(([category, items]) => (
+                    <div key={category} className="inventory-category-block">
+                      <h4 className="category-title">{category}</h4>
+                      <div className="table-responsive">
+                        <table className="inventory-table">
+                          <thead>
+                            <tr>
+                              <th>Наименование</th>
+                              <th style={{textAlign: 'center'}}>Кол-во</th>
+                              <th style={{textAlign: 'right'}}>Стоимость</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {items.map((item, idx) => (
+                              <tr key={idx}>
+                                <td>
+                                  <div className="item-name">{item.name}</div>
+                                  <div className="item-year">Выдано: {item.year} г.</div>
+                                </td>
+                                <td style={{textAlign: 'center', whiteSpace: 'nowrap'}}>
+                                  <span className="qty-badge">{item.quantity} {item.unit}</span>
+                                </td>
+                                <td style={{textAlign: 'right', whiteSpace: 'nowrap', fontWeight: '500'}}>
+                                  {formatCurrency(item.cost)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state" style={{marginTop: '40px'}}>
+                    <p style={{fontSize: '32px', margin: '0 0 10px 0'}}>📦</p>
+                    <p>Нет выданного имущества за выбранный период</p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'overview' && (
               <div className="stats-grid">
                 <div className="stat-card">
@@ -125,53 +161,6 @@ const InfoPanel = ({ district, filters = {}, isFiltersExpanded, onPanelToggle })
                   <div className="stat-unit">км²</div>
                 </div>
               </div>
-            )}
-
-            {(activeTab === 'data' || activeTab === 'charts') && (
-              <>
-                <select value={selectedIndicator} onChange={e => setSelectedIndicator(e.target.value)} style={{marginBottom: '15px'}}>
-                  {districtData?.indicators && Object.keys(districtData.indicators).length > 0 ?
-                    Object.keys(districtData.indicators).map(type => <option key={type} value={type}>{type}</option>) :
-                    <option value="">Нет данных</option>
-                  }
-                </select>
-
-                {activeTab === 'charts' ? (
-                  chartData.length > 0 ? (
-                    <div className="chart-container">
-                      <ResponsiveContainer width="100%" height={250}>
-                        <LineChart data={chartData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)"/>
-                          <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={12} />
-                          <YAxis stroke="var(--text-secondary)" fontSize={12} />
-                          <Tooltip contentStyle={{background: 'var(--bg-dark)', border: '1px solid var(--border-color)', borderRadius: '8px'}}/>
-                          <Legend wrapperStyle={{fontSize: '12px', marginTop: '10px'}}/>
-                          {districtData?.indicators[selectedIndicator] && 
-                            Object.keys(districtData.indicators[selectedIndicator]).map((key, i) => (
-                              <Line key={key} type="monotone" dataKey={key} stroke={COLORS[i % COLORS.length]} strokeWidth={3} dot={{r: 4}}/>
-                            ))}
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : <p style={{color: 'var(--text-secondary)', textAlign: 'center'}}>Нет данных для графиков</p>
-                ) : (
-                  districtData?.indicators?.[selectedIndicator] ? (
-                    <div>
-                      {Object.entries(districtData.indicators[selectedIndicator]).map(([name, values]) => (
-                        <div key={name} style={{background: 'rgba(0,0,0,0.2)', padding: '15px', borderRadius: '12px', marginBottom: '10px'}}>
-                          <h4 style={{margin: '0 0 10px 0', color: 'var(--text-primary)'}}>{name}</h4>
-                          {values.slice(-3).reverse().map((item, idx) => (
-                            <div key={idx} style={{display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '13px'}}>
-                              <span style={{color: 'var(--text-secondary)'}}>{item.date}</span>
-                              <strong style={{color: 'var(--primary-color)'}}>{item.value?.toLocaleString()}</strong>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ) : <p style={{color: 'var(--text-secondary)', textAlign: 'center'}}>Нет данных</p>
-                )}
-              </>
             )}
           </div>
         </>

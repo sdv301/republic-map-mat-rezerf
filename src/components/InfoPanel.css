@@ -11,7 +11,7 @@
 
 .info-panel {
   position: fixed;
-  top: 20px;
+  top: 0%;
   right: 20px;
   bottom: 20px;
   width: 380px;
@@ -180,3 +180,104 @@
 }
 .empty-state h3 { color: var(--primary-color); margin-bottom: 10px; }
 .empty-state p { color: var(--text-secondary); font-size: 14px; }
+
+
+/* --- СТИЛИ ДЛЯ НОВЫХ ТАБЛИЦ ИМУЩЕСТВА --- */
+
+.total-cost-badge {
+  margin-top: 15px; 
+  padding: 12px; 
+  background: rgba(56, 189, 248, 0.1); 
+  border-radius: 12px; 
+  border: 1px solid var(--primary-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.total-cost-badge small {
+  font-size: 12px; 
+  color: var(--text-secondary); 
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.total-cost-badge strong {
+  font-size: 22px; 
+  color: var(--primary-color);
+}
+
+.inventory-category-block {
+  background: rgba(0,0,0,0.2);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.category-title {
+  margin: 0;
+  padding: 12px 15px;
+  background: rgba(255,255,255,0.05);
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.inventory-table th {
+  padding: 10px 15px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  background: rgba(0,0,0,0.1);
+}
+
+.inventory-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.inventory-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.inventory-table tbody tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.item-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.item-year {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.qty-badge {
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--primary-color);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: bold;
+  display: inline-block;
+}

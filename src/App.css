@@ -35,3 +35,24 @@
   border: 1px solid var(--panel-border);
   border-radius: 8px !important;
 }
+
+/* src/App.css */
+
+/* Скрытая кнопка админки */
+.hidden-admin-btn {
+  position: fixed;
+  bottom: 15px;
+  left: 15px;
+  font-size: 16px;
+  text-decoration: none;
+  opacity: 0.15; /* Очень прозрачная */
+  z-index: 9999;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  filter: grayscale(100%);
+}
+
+.hidden-admin-btn:hover {
+  opacity: 1; /* Проявляется при наведении */
+  filter: grayscale(0%);
+  transform: rotate(90deg); /* Крутится при наведении */
+}

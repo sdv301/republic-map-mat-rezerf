@@ -68,57 +68,73 @@ app.get('/api/district/:id', (req, res) => {
   });
 });
 
-// API: Получить данные района для графиков (Исправлено для работы с SQLite)
+// --- ИСПРАВЛЕНО: Получение списка материальных резервов для InfoPanel ---
+// --- ИСПРАВЛЕНО: Получение списка материальных резервов с учетом фильтра дат ---
 app.get('/api/district/:id/data', (req, res) => {
   const { id } = req.params;
+  const { startDate, endDate } = req.query;
 
-  // 1. Ищем район в базе данных (и по английскому ID, и по русскому названию)
   db.get('SELECT id FROM districts WHERE id = ? OR name = ?', [id, id], (err, district) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!district) return res.status(404).json({ error: 'Район не найден' });
+    if (err || !district) return res.status(404).json({ error: 'Район не найден' });
 
-    // 2. Достаем данные из таблиц data_values, indicators и indicator_categories
-    const sql = `
+    let sql = `
       SELECT 
         c.name as category_name, 
-        i.name as indicator_name, 
-        dv.date, 
-        dv.value, 
+        i.name as item_name, 
         i.unit, 
-        dv.source
-      FROM data_values dv
-      JOIN indicators i ON dv.indicator_id = i.id
-      JOIN indicator_categories c ON i.category_id = c.id
-      WHERE dv.district_id = ?
-      ORDER BY dv.date ASC
+        d.quantity, 
+        d.total_cost, 
+        d.issue_year
+      FROM distributions d
+      JOIN items i ON d.item_id = i.id
+      JOIN item_categories c ON i.category_id = c.id
+      WHERE d.district_id = ? AND d.quantity > 0
     `;
+    const params = [district.id];
 
-    db.all(sql, [district.id], (err, rows) => {
+    // Применяем фильтр по датам с фронтенда
+    if (startDate && endDate) {
+      const startYear = parseInt(startDate.split('-')[0]);
+      const endYear = parseInt(endDate.split('-')[0]);
+      sql += " AND d.issue_year BETWEEN ? AND ?";
+      params.push(startYear, endYear);
+    }
+
+    sql += " ORDER BY c.name, i.name";
+
+    db.all(sql, params, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
 
-      // 3. Группируем данные для фронтенда
-      const indicators = {};
+      const inventory = {};
+      let grandTotal = 0;
+      let minYear = null;
+      let maxYear = null;
+
       rows.forEach(row => {
-        const type = row.category_name || 'Общие';
-        const name = row.indicator_name || 'Показатель';
-
-        if (!indicators[type]) indicators[type] = {};
-        if (!indicators[type][name]) indicators[type][name] = [];
-
-        indicators[type][name].push({
-          date: row.date,
-          value: row.value,
+        const cat = row.category_name || 'Разное';
+        if (!inventory[cat]) inventory[cat] = [];
+        
+        inventory[cat].push({
+          name: row.item_name,
           unit: row.unit,
-          source: row.source
+          quantity: row.quantity,
+          cost: row.total_cost,
+          year: row.issue_year
         });
+        grandTotal += row.total_cost;
+
+        // Вычисляем реальный диапазон дат для этих данных
+        if (minYear === null || row.issue_year < minYear) minYear = row.issue_year;
+        if (maxYear === null || row.issue_year > maxYear) maxYear = row.issue_year;
       });
 
       res.json({
-        indicators,
+        inventory,
         statistics: {
-          total_indicators: rows.length,
-          earliest_date: rows.length > 0 ? rows[0].date : null,
-          latest_date: rows.length > 0 ? rows[rows.length - 1].date : null
+          total_cost: grandTotal,
+          total_items: rows.length,
+          earliest_date: minYear,
+          latest_date: maxYear
         }
       });
     });
@@ -128,16 +144,25 @@ app.get('/api/district/:id/data', (req, res) => {
 // 5. Получить доп. инфо (статьи)
 app.get('/api/district/:id/info', (req, res) => {
   const { id } = req.params;
-  db.all('SELECT * FROM district_info WHERE district_id = ?', [id], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+  
+  db.get('SELECT id FROM districts WHERE id = ? OR name = ?', [id, id], (err, district) => {
+    if (err || !district) return res.status(404).json({});
     
-    const grouped = {};
-    rows.forEach(row => {
-      const cat = row.category || 'Общее';
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(row);
+    // Берем данные из таблицы district_info (если она у тебя так называется)
+    db.all('SELECT category, title, content, updated_at FROM district_info WHERE district_id = ?', [district.id], (err, rows) => {
+      if (err) return res.status(500).json({});
+      
+      const info = {};
+      rows.forEach(r => {
+        if (!info[r.category]) info[r.category] = [];
+        info[r.category].push({ 
+          title: r.title, 
+          content: r.content, 
+          updatedAt: r.updated_at 
+        });
+      });
+      res.json(info);
     });
-    res.json(grouped);
   });
 });
 
@@ -152,53 +177,216 @@ app.post('/api/data', (req, res) => {
 });
 
 // 7. Импорт из Excel
-app.post('/api/upload-excel', upload.single('file'), (req, res) => {
+/// --- ИСПРАВЛЕННЫЙ ПАРСЕР EXCEL (Синхронное сохранение) ---
+app.post('/api/upload-excel', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Файл не загружен' });
 
   try {
     const workbook = xlsx.readFile(req.file.path);
-    const data = xlsx.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-    
-    db.serialize(() => {
-      const stmt = db.prepare(`INSERT OR REPLACE INTO data_values (district_id, indicator_id, date, value, source) VALUES (?, ?, ?, ?, ?)`);
-      data.forEach(row => {
-        stmt.run(row.district_id, row.indicator_id, row.date, row.value, row.source);
+    const sheetName = workbook.SheetNames[0];
+    const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+
+    // Индексы колонок по твоему файлу (6 - Жиганский, 8 - Оймяконский, 10 - Абыйский)
+    const colToDistrict = {
+      6: 'zhigansky',
+      8: 'oymyakonsky',
+      10: 'abysky'
+    };
+
+    // Вспомогательные функции, чтобы заставить БД ждать (Promises)
+    const runDb = (sql, params) => new Promise((resolve, reject) => {
+      db.run(sql, params, function(err) {
+        if (err) reject(err); else resolve(this.lastID);
       });
-      stmt.finalize();
     });
 
-    fs.unlinkSync(req.file.path);
-    res.json({ success: true, count: data.length });
+    const getDb = (sql, params) => new Promise((resolve, reject) => {
+      db.get(sql, params, (err, row) => {
+        if (err) reject(err); else resolve(row);
+      });
+    });
+
+    let currentCategoryId = null;
+    let recordsAdded = 0;
+
+    // Идем по строкам Excel
+    for (let i = 5; i < data.length; i++) {
+      const row = data[i];
+      if (!row || row.length === 0) continue;
+
+      const colA = row[0]; // Номер
+      const colB = row[1]; // Наименование
+
+      // Если это Категория (нет номера, но есть текст)
+      if (!colA && colB) {
+        await runDb(`INSERT OR IGNORE INTO item_categories (name) VALUES (?)`, [colB]);
+        const cat = await getDb(`SELECT id FROM item_categories WHERE name = ?`, [colB]);
+        if (cat) currentCategoryId = cat.id;
+        continue;
+      }
+
+      // Если это Товар (есть и номер, и наименование)
+      if (colA && colB) {
+        const itemName = colB;
+        const unit = row[2];
+        const price = parseFloat(row[4]) || 0;
+
+        // 1. Сохраняем товар с ПРАВИЛЬНОЙ категорией
+        const itemId = await runDb(
+          `INSERT INTO items (category_id, name, unit, unit_price) VALUES (?, ?, ?, ?)`, 
+          [currentCategoryId, itemName, unit, price]
+        );
+
+        // 2. Проверяем колонки районов и записываем выдачу
+        for (const colIndex of Object.keys(colToDistrict)) {
+          const qtyCol = parseInt(colIndex);
+          const costCol = qtyCol + 1;
+          
+          const quantity = parseFloat(row[qtyCol]) || 0;
+          const cost = parseFloat(row[costCol]) || 0;
+
+          if (quantity > 0) {
+            await runDb(
+              `INSERT INTO distributions (district_id, item_id, issue_year, quantity, total_cost) VALUES (?, ?, 2025, ?, ?)`, 
+              [colToDistrict[colIndex], itemId, quantity, cost]
+            );
+            recordsAdded++;
+          }
+        }
+      }
+    }
+
+    fs.unlinkSync(req.file.path); // Удаляем файл
+    res.json({ success: true, message: `Загружено записей о выдаче: ${recordsAdded}`, count: recordsAdded });
+
   } catch (error) {
+    console.error('Ошибка обработки Excel:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // 8. Экспорт в Excel за период
-app.get('/api/export-excel', (req, res) => {
-  const { startDate, endDate } = req.query;
-  let sql = `
-    SELECT d.name as "Район", c.name as "Категория", i.name as "Показатель", dv.date as "Дата", dv.value as "Значение", i.unit as "Ед. изм.", dv.source as "Источник"
-    FROM data_values dv
-    JOIN districts d ON dv.district_id = d.id
-    JOIN indicators i ON dv.indicator_id = i.id
-    JOIN indicator_categories c ON i.category_id = c.id
-  `;
-  const params = [];
-  if (startDate && endDate) {
-    sql += " WHERE dv.date BETWEEN ? AND ?";
-    params.push(startDate, endDate);
+// --- ДОБАВЛЕНО: Проверка наличия данных для Excel ---
+app.get('/api/check-export', (req, res) => {
+  const { startDate, endDate, district_id } = req.query;
+  
+  let baseSql = "SELECT COUNT(*) as count, MAX(issue_year) as latest_year FROM distributions WHERE quantity > 0";
+  const baseParams = [];
+  
+  if (district_id && district_id !== 'all') {
+    baseSql += " AND district_id = ?";
+    baseParams.push(district_id);
   }
-  sql += " ORDER BY dv.date DESC, d.name ASC";
+
+  let checkSql = baseSql;
+  const checkParams = [...baseParams];
+
+  // Проверяем выбранный период
+  if (startDate && endDate) {
+    const startYear = parseInt(startDate.split('-')[0]);
+    const endYear = parseInt(endDate.split('-')[0]);
+    checkSql += " AND issue_year BETWEEN ? AND ?";
+    checkParams.push(startYear, endYear);
+  }
+
+  db.get(checkSql, checkParams, (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    
+    // Если данные за этот период есть
+    if (row && row.count > 0) {
+      res.json({ hasData: true });
+    } else {
+      // Если данных нет, ищем, в каком году были самые свежие записи
+      db.get(baseSql, baseParams, (err2, row2) => {
+         res.json({ 
+           hasData: false, 
+           latest_year: row2 && row2.latest_year ? row2.latest_year : null 
+         });
+      });
+    }
+  });
+});
+
+app.get('/api/date-range', (req, res) => {
+  db.get('SELECT MIN(issue_year) as min_year, MAX(issue_year) as max_year FROM distributions WHERE quantity > 0', [], (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({
+      min_year: row?.min_year || new Date().getFullYear(),
+      max_year: row?.max_year || new Date().getFullYear()
+    });
+  });
+});
+
+// --- ИСПРАВЛЕННЫЙ ЭКСПОРТ В EXCEL (Материальные резервы) ---
+app.get('/api/export-excel', (req, res) => {
+  const { startDate, endDate, district_id } = req.query;
+  
+  let sql = `
+    SELECT 
+      d.name as "Район/Ведомство", 
+      c.name as "Категория имущества", 
+      i.name as "Наименование (Номенклатура)", 
+      dist.issue_year as "Год выдачи",
+      dist.quantity as "Количество", 
+      i.unit as "Ед. изм.", 
+      dist.total_cost as "Общая стоимость (руб)"
+    FROM distributions dist
+    JOIN districts d ON dist.district_id = d.id
+    JOIN items i ON dist.item_id = i.id
+    JOIN item_categories c ON i.category_id = c.id
+    WHERE dist.quantity > 0
+  `;
+  
+  const params = [];
+  
+  // Фильтр по датам (пока фильтруем по году, так как в базе лежит issue_year)
+  if (startDate && endDate) {
+    const startYear = parseInt(startDate.split('-')[0]);
+    const endYear = parseInt(endDate.split('-')[0]);
+    sql += " AND dist.issue_year BETWEEN ? AND ?";
+    params.push(startYear, endYear);
+  }
+
+  // Фильтр по конкретному району (если выбран не "Все")
+  if (district_id && district_id !== 'all') {
+    sql += " AND dist.district_id = ?";
+    params.push(district_id);
+  }
+
+  sql += " ORDER BY d.name ASC, c.name ASC, i.name ASC";
 
   db.all(sql, params, (err, rows) => {
     if (err) return res.status(500).send(err.message);
-    const ws = xlsx.utils.json_to_sheet(rows);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, "Data");
-    const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    res.setHeader('Content-Disposition', 'attachment; filename="export.xlsx"');
-    res.send(buf);
+    if (rows.length === 0) return res.status(404).send('Нет данных для выгрузки за этот период/регион');
+
+    try {
+      // Формируем Excel
+      const ws = xlsx.utils.json_to_sheet(rows);
+      
+      // Настраиваем ширину колонок для красоты
+      ws['!cols'] = [
+        { wch: 25 }, // Район
+        { wch: 35 }, // Категория
+        { wch: 30 }, // Наименование
+        { wch: 12 }, // Год
+        { wch: 12 }, // Кол-во
+        { wch: 10 }, // Ед. изм.
+        { wch: 20 }  // Стоимость
+      ];
+
+      const wb = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(wb, ws, "Материальные резервы");
+      const buf = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      
+      // Кодируем имя файла, чтобы русские буквы не ломались в браузере
+      const fileName = encodeURIComponent('Выдача_МЦ_Якутия.xlsx');
+      
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${fileName}`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(buf);
+    } catch (excelErr) {
+      res.status(500).send('Ошибка при создании Excel файла');
+    }
   });
 });
 
